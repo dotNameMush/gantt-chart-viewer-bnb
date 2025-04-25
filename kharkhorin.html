@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="mn">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Хархорин Станцын Ганттын Диаграм</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+    <script>
+      window.PropTypes = PropTypes;
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chrono-node/1.3.11/chrono.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+    <style>
+      @media print {
+        body {
+          margin: 0;
+          padding: 0;
+        }
+        .container {
+          max-width: none !important;
+          padding: 0 !important;
+        }
+        .chart-container {
+          box-shadow: none !important;
+          border: 1px solid #000 !important;
+          background: #fff !important;
+        }
+        .print-header,
+        .print-footer {
+          display: block !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+        .chart-title {
+          font-size: 16pt !important;
+        }
+        .chart-container {
+          margin: 0 !important;
+        }
+        @page {
+          margin: 1cm;
+        }
+        .print-footer::after {
+          content: "Хуудас " counter(page) " / " counter(pages);
+          float: right;
+        }
+      }
+      .print-header,
+      .print-footer {
+        display: none;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const GanttChart = ({ data, projectInfo }) => {
+        const minDate = new Date(
+          Math.min(...data.map((task) => new Date(task.startDate)))
+        );
+        const maxDate = new Date(
+          Math.max(...data.map((task) => new Date(task.endDate)))
+        );
+        const dateRange = (maxDate - minDate) / (1000 * 60 * 60 * 24);
+
+        const getTicks = () => {
+          const ticks = [];
+          let currentDate = new Date(minDate);
+          const interval = Math.ceil(dateRange / 10);
+          while (currentDate <= maxDate) {
+            ticks.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + interval);
+          }
+          return ticks;
+        };
+
+        const chartData = data.map((task, index) => ({
+          name: task.name,
+          start: (new Date(task.startDate) - minDate) / (1000 * 60 * 60 * 24),
+          duration:
+            (new Date(task.endDate) - new Date(task.startDate)) /
+              (1000 * 60 * 60 * 24) +
+            1,
+          index,
+        }));
+
+        return (
+          <div>
+            <div className="chart-container  bg-white p-6 rounded-lg shadow-lg m-4">
+              <h2 className="chart-title text-2xl font-bold mb-4 text-center">
+                Хархорин Дэд Станцын Ажлын Хуваарь
+              </h2>
+              <Recharts.ResponsiveContainer
+                width="100%"
+                height={Math.max(
+                  data.length * 50 + 120,
+                  window.innerHeight - 200
+                )}
+              >
+                <Recharts.BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+                >
+                  <Recharts.CartesianGrid
+                    strokeDasharray="3 3"
+                    fill="#f9f9f9"
+                  />
+                  <Recharts.XAxis
+                    type="number"
+                    domain={[0, dateRange]}
+                    ticks={getTicks().map(
+                      (date) => (date - minDate) / (1000 * 60 * 60 * 24)
+                    )}
+                    tickFormatter={(value) => {
+                      const date = new Date(
+                        minDate.getTime() + value * 1000 * 60 * 60 * 24
+                      );
+                      return date.toLocaleDateString("mn-MN", {
+                        month: "short",
+                        day: "numeric",
+                      });
+                    }}
+                    label={{ value: "Огноо", position: "bottom", offset: 10 }}
+                  />
+                  <Recharts.YAxis
+                    type="category"
+                    dataKey="index"
+                    tickFormatter={(index) => chartData[index]?.name || ""}
+                    width={300}
+                    tick={{ fontSize: 10, dy: 5 }}
+                  />
+                  <Recharts.Tooltip
+                    formatter={(value, name, props) => {
+                      const task = chartData[props.payload.index];
+                      const startDate = new Date(
+                        minDate.getTime() + task.start * 1000 * 60 * 60 * 24
+                      );
+                      const endDate = new Date(
+                        minDate.getTime() +
+                          (task.start + task.duration - 1) * 1000 * 60 * 60 * 24
+                      );
+                      if (name === "duration") {
+                        // return [
+                        //   `Ажил: ${
+                        //     task.name
+                        //   }\nХугацаа: ${startDate.toLocaleDateString(
+                        //     "mn-MN"
+                        //   )} - ${endDate.toLocaleDateString("mn-MN")}`,
+                        //   "Дэлгэрэнгүй",
+                        // ];
+                        return [
+                          <div>
+                            <p>Ажил: {task.name}</p>
+                            <p>
+                              Хугацаа: {startDate.toLocaleDateString("mn-MN")} -{" "}
+                              {endDate.toLocaleDateString("mn-MN")}
+                            </p>
+                          </div>,
+                          "Дэлгэрэнгүй",
+                        ];
+                      }
+                      return [value, name];
+                    }}
+                    labelFormatter={() => ""}
+                  />
+                  <Recharts.Bar
+                    dataKey="start"
+                    stackId="a"
+                    fill="transparent"
+                    barSize={20}
+                  />
+                  <Recharts.Bar
+                    dataKey="duration"
+                    stackId="a"
+                    fill="#4f46e5"
+                    barSize={20}
+                    radius={[5, 5, 5, 5]}
+                  />
+                </Recharts.BarChart>
+              </Recharts.ResponsiveContainer>
+            </div>
+            <div className="print-footer p-4 bg-gray-200 text-sm">
+              <span>
+                Хэвлэсэн Огноо: {new Date().toLocaleDateString("mn-MN")}
+              </span>
+            </div>
+          </div>
+        );
+      };
+
+      const App = () => {
+        const [data, setData] = React.useState(null);
+        const [projectInfo, setProjectInfo] = React.useState(null);
+        const [loading, setLoading] = React.useState(true);
+        const [error, setError] = React.useState(null);
+
+        React.useEffect(() => {
+          const loadFile = async () => {
+            try {
+              const response = await fetch("kharkhorin.xlsx");
+              if (!response.ok) {
+                throw new Error(
+                  "Файлыг татаж чадсангүй. Файл байгаа эсэхийг шалгана уу."
+                );
+              }
+              const arrayBuffer = await response.arrayBuffer();
+              const workbook = XLSX.read(arrayBuffer, { type: "array" });
+              const sheetName = workbook.SheetNames[0];
+              const sheet = workbook.Sheets[sheetName];
+              const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+              // Extract project info from the first few rows
+              const projectInfo = {
+                client: jsonData[1][1]?.trim() || "N/A",
+                tenderName: jsonData[2][1]?.trim() || "N/A",
+                tenderNumber: jsonData[3][1]?.trim() || "N/A",
+                participant: jsonData[4][1]?.trim() || "N/A",
+              };
+
+              const tasks = jsonData
+                .slice(6)
+                .map((row) => ({
+                  name: row[1]?.trim() || "",
+                  startDate: row[2]?.trim() || "",
+                  endDate: row[3]?.trim() || "",
+                  duration: row[4] || "",
+                }))
+                .filter((task) => task.name && task.startDate && task.endDate)
+                .map((task) => ({
+                  ...task,
+                  startDate:
+                    chrono.parseDate(task.startDate) ||
+                    new Date(task.startDate),
+                  endDate:
+                    chrono.parseDate(task.endDate) || new Date(task.endDate),
+                }))
+                .filter(
+                  (task) =>
+                    task.startDate instanceof Date &&
+                    !isNaN(task.startDate) &&
+                    task.endDate instanceof Date &&
+                    !isNaN(task.endDate)
+                );
+
+              setData(tasks);
+              setProjectInfo(projectInfo);
+              setLoading(false);
+            } catch (err) {
+              setError(err.message);
+              setLoading(false);
+            }
+          };
+
+          loadFile();
+        }, []);
+
+        return (
+          <div className="container mx-auto p-4 h-screen flex flex-col">
+            <h1 className="text-3xl font-bold text-center mb-6 no-print">
+              Баясгалант Станцын Ганттын Диаграм
+            </h1>
+            {loading && (
+              <div className="text-center text-gray-600 flex-1 no-print">
+                Ачааллаж байна...
+              </div>
+            )}
+            {error && !loading && (
+              <div className="text-center text-red-600 flex-1 no-print">
+                Алдаа: {error}
+              </div>
+            )}
+            {data && !loading && !error && data.length > 0 ? (
+              <div className="flex-1">
+                <GanttChart data={data} projectInfo={projectInfo} />
+              </div>
+            ) : (
+              !loading &&
+              !error && (
+                <div className="text-center text-gray-600 flex-1 no-print">
+                  Өгөгдөл олдсонгүй. Файлыг шалгана уу.
+                </div>
+              )
+            )}
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
